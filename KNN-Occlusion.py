@@ -124,8 +124,12 @@ def show_prediction_labels_on_image(img_path, predictions):
         
         top_right = (right, top)
         bottom_left = (left, bottom + 22)
+        bottom_right=(right,bottom)
+        a = left
+        b = bottom-top
+        top_left=(top,left)
         cv2.rectangle(image, top_right,bottom_left, (255,0,0), 3)
-        cv2.putText(image, str(name), (left,bottom), cv2.FONT_HERSHEY_SIMPLEX, 1, name_to_color(name), 1,cv2.FILLED)
+        cv2.putText(image, str(name), (left,bottom), cv2.FONT_HERSHEY_SIMPLEX, 0.5, name_to_color(name),1,cv2.FILLED)
 
     
     
@@ -152,6 +156,7 @@ if __name__ == "__main__":
 
         # Find all people in the image using a trained classifier model
         predictions = predict(full_file_path, model_path="trained_knn_model.clf")
+        print(predictions)
 
         # Print results on the console
         for name, (top, right, bottom, left) in predictions:
