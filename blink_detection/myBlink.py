@@ -57,13 +57,19 @@ while True:
         break
 
     grayFrame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-
+  
+    tic = time.perf_counter()
     faces = detector(grayFrame, 0)
+    toc = time.perf_counter()
+    print(f"Time to locate face:{toc - tic:.4f}")
 
     for face in faces:
 
+        tic = time.perf_counter()
         landmarks = predictor(grayFrame, face)
         landmarks = face_utils.shape_to_np(landmarks)
+        toc = time.perf_counter()
+        print(f"Time to predict landmarks:{toc - tic:.4f}")
 
         leftEye = landmarks[lStart:lEnd]
         rightEye = landmarks[rStart:rEnd]
@@ -71,15 +77,16 @@ while True:
         rightEAR = eye_aspect_ratio(rightEye)
 
         ear = (leftEAR + rightEAR) / 2.0
-
+   
         leftEyeHull = cv2.convexHull(leftEye)
         rightEyeHull = cv2.convexHull(rightEye)
         cv2.drawContours(frame, [leftEyeHull], -1, (0, 255, 0), 1)
         cv2.drawContours(frame, [rightEyeHull], -1, (0, 255, 0), 1)
+  
 
         if ear < EAR_THRESHOLD:
             FRAME_COUNTER += 1
-            print (ear)
+            #print (ear)
         
         else:
 
