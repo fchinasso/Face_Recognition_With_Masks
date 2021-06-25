@@ -34,7 +34,7 @@ TOTAL_BLINKS = 0
 (lStart, lEnd) = face_utils.FACIAL_LANDMARKS_IDXS["left_eye"]
 (rStart, rEnd) = face_utils.FACIAL_LANDMARKS_IDXS["right_eye"]
 
-detector = dlib.get_frontal_face_detector()
+detector = cv2.CascadeClassifier("haarcascade_frontalface_default.xml")
 predictor = dlib.shape_predictor("shape_predictor_68_face_landmarks.dat")
 
 cap = cv2.VideoCapture(0)
@@ -55,22 +55,23 @@ while True:
     if not Vcheck:
         print("Can't receive frame. Exiting ...")
         break
-    frame = cv2.flip(frame,1)
-    grayFrame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    
-  
-    tic = time.perf_counter()
-    faces = detector(grayFrame, 0)
-    toc = time.perf_counter()
-    print(f"Time to locate face:{toc - tic:.4f}")
 
-    for face in faces:
+    grayFrame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+    faces = detector.detectMultiScale(grayFrame, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30),flags=cv2.CASCADE_SCALE_IMAGE)
+
+    for (x, y, w, h) in faces:
 
         tic = time.perf_counter()
-        landmarks = predictor(grayFrame, face)
+        rect = dlib.rectangle(int(x), int(y), int(x + w),int(y + h))
+        toc = time.perf_counter()
+        print(f"Time to locate face:{toc-tic}")
+
+        tic= time.perf_counter()
+        landmarks = predictor(grayFrame, rect)
         landmarks = face_utils.shape_to_np(landmarks)
         toc = time.perf_counter()
-        print(f"Time to predict landmarks:{toc - tic:.4f}")
+        print(f"Time to predict landmarks:{toc-tic:.4}")
 
         leftEye = landmarks[lStart:lEnd]
         rightEye = landmarks[rStart:rEnd]
@@ -78,16 +79,15 @@ while True:
         rightEAR = eye_aspect_ratio(rightEye)
 
         ear = (leftEAR + rightEAR) / 2.0
-   
+
         leftEyeHull = cv2.convexHull(leftEye)
         rightEyeHull = cv2.convexHull(rightEye)
         cv2.drawContours(frame, [leftEyeHull], -1, (0, 255, 0), 1)
         cv2.drawContours(frame, [rightEyeHull], -1, (0, 255, 0), 1)
-  
 
         if ear < EAR_THRESHOLD:
             FRAME_COUNTER += 1
-            #print (ear)
+            print (ear)
         
         else:
 
@@ -100,7 +100,7 @@ while True:
     cv2.putText(frame, "Blinks: {}".format(TOTAL_BLINKS), (10, 30),cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
     cv2.putText(frame,"FPS: {}".format(fps),(505,470),cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
-    
+
     cv2.imshow("Frame", frame)
     key = cv2.waitKey(1) & 0xFF
 
