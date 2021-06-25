@@ -58,14 +58,16 @@ while True:
 
     grayFrame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
+    tic = time.perf_counter()
     faces = detector.detectMultiScale(grayFrame, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30),flags=cv2.CASCADE_SCALE_IMAGE)
+    toc = time.perf_counter()
+    print(f"Time to locate face:{toc-tic}")
 
     for (x, y, w, h) in faces:
 
-        tic = time.perf_counter()
+        
         rect = dlib.rectangle(int(x), int(y), int(x + w),int(y + h))
-        toc = time.perf_counter()
-        print(f"Time to locate face:{toc-tic}")
+ 
 
         tic= time.perf_counter()
         landmarks = predictor(grayFrame, rect)
