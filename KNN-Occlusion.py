@@ -9,23 +9,35 @@ import cv2
 import time
 import detector 
 import math
+import communications
+from enum import Enum
 
-#Initiates detector
-rec_face = detector.face_detector()
+#Enum of States 
+class States(Enum):
+    Idle = 1
 
+currentState = States.Idle
 
-
+#Dirs and extensions
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 TRAIN_DIR = "photos/known"
 TEST_DIR = "photos/unknown"
 
+#Initiates detector
+rec_face = detector.face_detector()
+
+#Initiates Serial Handler
+serial= communications.SerialHandler()
+
+
+#randor color generator for display
 def name_to_color(name):
     # Take 3 first letters, tolower()
     # lowercased character ord() value rage is 97 to 122, substract 97, multiply by 8
     color = [(ord(c.lower())-97)*8 for c in name[:3]]
     return color
 
-
+#Trains Classifier
 def train(train_dir, model_save_path=None, n_neighbors=None, knn_algo='ball_tree', verbose=False):
 
     X = []
@@ -72,7 +84,7 @@ def train(train_dir, model_save_path=None, n_neighbors=None, knn_algo='ball_tree
 
     return knn_clf
 
-
+#Given an image gives prediction
 def predict(X_img_path, knn_clf=None, model_path=None, distance_threshold=0.5):
   
     if not os.path.isfile(X_img_path) or os.path.splitext(X_img_path)[1][1:] not in ALLOWED_EXTENSIONS:
@@ -111,7 +123,7 @@ def predict(X_img_path, knn_clf=None, model_path=None, distance_threshold=0.5):
     # Predict classes and remove classifications that aren't within the threshold
     return [(pred, loc) if rec else ("unknown", loc) for pred, loc, rec in zip(knn_clf.predict(faces_encodings), X_face_locations, are_matches)]
 
-
+#Displays labels on image
 def show_prediction_labels_on_image(img_path, predictions):
    
     image = face_recognition.load_image_file(img_path)
@@ -140,27 +152,32 @@ def show_prediction_labels_on_image(img_path, predictions):
 
 if __name__ == "__main__":
    
-    tic = time.perf_counter()
-    print("Training KNN classifier...")
+    #tic = time.perf_counter()
+    #print("Training KNN classifier...")
     #Creates Classifier
-    classifier = train(TRAIN_DIR, model_save_path="trained_knn_model.clf",verbose=True)
-    print("Training complete!")
-    toc = time.perf_counter()
-    print(f"Time to train {toc - tic:0.4f} seconds")
+    #classifier = train(TRAIN_DIR, model_save_path="trained_knn_model.clf",verbose=True)
+    #print("Training complete!")
+    #toc = time.perf_counter()
+    # print(f"Time to train {toc - tic:0.4f} seconds")
 
     
-    for image_file in os.listdir(TEST_DIR):
-        full_file_path = os.path.join(TEST_DIR, image_file)
+    # for image_file in os.listdir(TEST_DIR):
+    #     full_file_path = os.path.join(TEST_DIR, image_file)
 
-        print("Looking for faces in {}".format(image_file))
+    #     print("Looking for faces in {}".format(image_file))
 
-        # Find all people in the image using a trained classifier model
-        predictions = predict(full_file_path, model_path="trained_knn_model.clf")
-        print(predictions)
+    #     # Find all people in the image using a trained classifier model
+    #     predictions = predict(full_file_path, model_path="trained_knn_model.clf")
+    #     print(predictions)
 
-        # Print results on the console
-        for name, (top, right, bottom, left) in predictions:
-            print("- Found {} at ({}, {})".format(name, left, top))
+    #     # Print results on the console
+    #     for name, (top, right, bottom, left) in predictions:
+    #         print("- Found {} at ({}, {})".format(name, left, top))
 
-        # Display results overlaid on an image
-        show_prediction_labels_on_image(os.path.join(TEST_DIR, image_file), predictions)
+    #     # Display results overlaid on an image
+    #     show_prediction_labels_on_image(os.path.join(TEST_DIR, image_file), predictions)
+   
+   while True:
+       if currentState == States.Idle:
+        serial.pooling()
+    
