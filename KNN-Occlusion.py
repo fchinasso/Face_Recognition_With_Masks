@@ -12,6 +12,9 @@ import math
 import communications
 from enum import Enum
 
+#Verbose for Debug
+verbose=True
+
 #Enum of States 
 class States(Enum):
     Idle = 1
@@ -27,7 +30,8 @@ TEST_DIR = "photos/unknown"
 rec_face = detector.face_detector()
 
 #Initiates Serial Handler
-serial= communications.SerialHandler()
+serial= communications.SerialHandler(verbose)
+message = []
 
 
 #randor color generator for display
@@ -155,10 +159,11 @@ if __name__ == "__main__":
     #tic = time.perf_counter()
     #print("Training KNN classifier...")
     #Creates Classifier
-    #classifier = train(TRAIN_DIR, model_save_path="trained_knn_model.clf",verbose=True)
+    #classifier = train(TRAIN_DIR, model_save_path="trained_knn_model.clf",verbose)
     #print("Training complete!")
     #toc = time.perf_counter()
-    # print(f"Time to train {toc - tic:0.4f} seconds")
+    #if verbose:
+    #    print(f"Time to train {toc - tic:0.4f} seconds")
 
     
     # for image_file in os.listdir(TEST_DIR):
@@ -178,6 +183,9 @@ if __name__ == "__main__":
     #     show_prediction_labels_on_image(os.path.join(TEST_DIR, image_file), predictions)
    
    while True:
+
+       
        if currentState == States.Idle:
         serial.pooling()
+        
     
