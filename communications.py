@@ -1,14 +1,16 @@
 import serial
 import os
 import cv2 as cv
+from time import sleep
 
 USERS_DIR = "photos/known"
 
 class SerialHandler():
 
     def __init__(self,Verbose=False):
-        self.serial=serial.Serial("/dev/ttyACM0",baudrate=115200,timeout=0.5)
+        self.serial=serial.Serial("/dev/ttyS0",baudrate=115200,timeout=2)
         self.Verbose= Verbose
+        self.cap = cv.VideoCapture(0)
         
          
 
@@ -38,7 +40,8 @@ class SerialHandler():
                     
             
             except:
-                print("Failed to parse")
+                print("ERROR:Failed to parse")
+                return
 
             #Register new user on bank
             if m_header == "02" and m_type == "03":
@@ -53,14 +56,27 @@ class SerialHandler():
                 if self.Verbose:
                     print(f"Creating new user:{user}")
                 
-                dir=os.path.join(USERS_DIR,user)
+                user_dir=os.path.join(USERS_DIR,user)
 
-                if os.path.exists(dir):
+                if os.path.exists(user_dir):
                     print("ERROR:User already exists")
                     return
 
                 else:
-                    os.mkdir(dir)
+                    
+                    try:
+                        os.mkdir(user_dir)
+                        
+                        for i in range(3):
+                            
+                            ret,frame = self.cap.read()
+                            cv.imwrite(f"{os.path.join(user_dir,str(i))}.jpg",frame) 
+                            sleep(3)
+                            
+                    except:
+                        print("ERROR:Failed to take picture")
+                        return
+
                 
                 
 
