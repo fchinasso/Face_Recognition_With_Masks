@@ -18,9 +18,9 @@ rec_face = detector.face_detector()
 class SerialHandler():
 
     def __init__(self,Verbose=False):
-        self.serial=serial.Serial("/dev/ttyACM1",baudrate=115200, parity=serial.PARITY_NONE,stopbits=serial.STOPBITS_ONE,bytesize=serial.EIGHTBITS,timeout=2)
+        self.serial=serial.Serial("/dev/ttyS0",baudrate=115200, parity=serial.PARITY_NONE,stopbits=serial.STOPBITS_ONE,bytesize=serial.EIGHTBITS,timeout=2)
         self.Verbose = Verbose
-        self.cap = cv.VideoCapture(0)
+       
         
          
 
@@ -61,7 +61,9 @@ class SerialHandler():
 
     
     def register_new_user(self,message,m_lenght):
-        
+
+        self.cap = cv.VideoCapture(0)
+
         user = ""
         register_size = 2*(m_lenght-2)
 
@@ -96,9 +98,15 @@ class SerialHandler():
 
                     if time.time()-timeout_time >= TIME_BETWEEN_PHOTOS*IMAGE_PER_USER*2:
                         print(f"WARNING:Timeout to take pictures, {img_counter} were taken.")
+                        
+                        if img_counter == 0:
+                            shutil.rmtree(user_dir)
+                        self.cap.release()
                         break
 
                     m_tosend = "03" + '{0:x}'.format(m_lenght).zfill(2) + "03" + '{0:x}'.format(img_counter+1).zfill(2) + user_hex
+                    m_tosend=bytearray.fromhex(m_tosend).decode()
+
 
                     ret,frame = self.cap.read()
                     
@@ -113,19 +121,23 @@ class SerialHandler():
                             if self.Verbose:
                                 print(f"Image {img_counter} written.")
                                 print(m_tosend)
+
+                            self.serial.write(m_tosend.encode())   
                             start_time = time.time()
                             img_counter += 1
 
                     
                         else:
                             print("Photo not suitable for training: {}".format("Didn't find a face" if len(bounding_boxes) < 1 else "Found more than one face."))
+                            cv.imshow(f"{os.path.join(user_dir,str(img_counter))}.jpg",frame)
                             start_time = time.time()
-
-                    #self.serial.write(m_tosend.encode('utf-8'))
                 self.cap.release()
 
-            except:
+            except Exception as e: 
+                print(e)
                 print("ERROR:Failed to take pictures.")
+                shutil.rmtree(user_dir)
+                self.cap.release()
                 return
 
 
