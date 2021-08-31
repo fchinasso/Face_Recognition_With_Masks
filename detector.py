@@ -1,6 +1,7 @@
 import face_recognition 
 import numpy as np
 import cv2
+import math
 
 CONFIDENCE = 0.6
 
@@ -63,5 +64,17 @@ class face_detector():
         except:
             box_faces = []
         return box_faces
+
+    def bounding_box_area(self,box):
+
+        try:         
+            area = math.sqrt(pow((box[3]-box[1]),2))*math.sqrt(pow((box[2]-box[0]),2))
+
+        except Exception as e: 
+                print(e)
+                return
+        
+        return area
+
 
 

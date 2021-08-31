@@ -11,15 +11,10 @@ import detector
 import math
 import communications
 from enum import Enum
+from datetime import datetime
 
 #Verbose for Debug
 verbose=True
-
-#Enum of States 
-class States(Enum):
-    Idle = 1
-
-currentState = States.Idle
 
 #Dirs and extensions
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
@@ -31,15 +26,18 @@ rec_face = detector.face_detector()
 
 #Initiates Serial Handler
 serial= communications.SerialHandler(verbose)
-message = []
+
+#Proportion factor to start a matching 
+PROPORTION_FACTOR = 5.5
 
 
-#randor color generator for display
+#Random color generator
 def name_to_color(name):
     # Take 3 first letters, tolower()
     # lowercased character ord() value rage is 97 to 122, substract 97, multiply by 8
     color = [(ord(c.lower())-97)*8 for c in name[:3]]
     return color
+
 
 #Trains Classifier
 def train(train_dir, model_save_path=None, n_neighbors=None, knn_algo='ball_tree', verbose=False):
@@ -54,6 +52,7 @@ def train(train_dir, model_save_path=None, n_neighbors=None, knn_algo='ball_tree
 
         # Loop through each training image for the current person
         for img_path in image_files_in_folder(os.path.join(train_dir, class_dir)):
+
             image = face_recognition.load_image_file(img_path)
             #Uses previously iniate detector 
             face_bounding_boxes = rec_face.detect_face(image=image)
@@ -75,8 +74,6 @@ def train(train_dir, model_save_path=None, n_neighbors=None, knn_algo='ball_tree
         if verbose:
             print("Chose n_neighbors automatically:", n_neighbors)
 
-    print(Y)
-
     # Create and train the KNN classifier
     knn_clf = neighbors.KNeighborsClassifier(n_neighbors=n_neighbors, algorithm=knn_algo, weights='distance')
     knn_clf.fit(X, Y)
@@ -89,11 +86,8 @@ def train(train_dir, model_save_path=None, n_neighbors=None, knn_algo='ball_tree
     return knn_clf
 
 #Given an image gives prediction
-def predict(X_img_path, knn_clf=None, model_path=None, distance_threshold=0.5):
+def predict(X_img_path_or_frame, knn_clf=None, model_path=None, distance_threshold=0.5):
   
-    if not os.path.isfile(X_img_path) or os.path.splitext(X_img_path)[1][1:] not in ALLOWED_EXTENSIONS:
-        raise Exception("Invalid image path: {}".format(X_img_path))
-
     if knn_clf is None and model_path is None:
         raise Exception("Must supply knn classifier either thourgh knn_clf or model_path")
 
@@ -102,13 +96,16 @@ def predict(X_img_path, knn_clf=None, model_path=None, distance_threshold=0.5):
         with open(model_path, 'rb') as f:
             knn_clf = pickle.load(f)
 
-    tic = time.perf_counter()
+
     # Load image file and find face locations
-    X_img = face_recognition.load_image_file(X_img_path)
+    if os.path.isfile(X_img_path_or_frame):
+        X_img = face_recognition.load_image_file(X_img_path_or_frame)
+    
+    if  not os.path.isfile(X_img_path_or_frame):
+        X_img = X_img_path_or_frame
+
     #X_face_locations = face_recognition.face_locations(X_img)
     X_face_locations = rec_face.detect_face(X_img)
-    toc = time.perf_counter()
-    print(f"Time to locate face {toc - tic:0.4f} seconds")
 
     # If no faces are found in the image, return an empty result.
     if len(X_face_locations) == 0:
@@ -118,11 +115,8 @@ def predict(X_img_path, knn_clf=None, model_path=None, distance_threshold=0.5):
     faces_encodings = face_recognition.face_encodings(X_img, known_face_locations=X_face_locations)
 
     # Use the KNN model to find the best matches for the test face
-    tic = time.perf_counter()
     closest_distances = knn_clf.kneighbors(faces_encodings, n_neighbors=1)
     are_matches = [closest_distances[0][i][0] <= distance_threshold for i in range(len(X_face_locations))]
-    toc = time.perf_counter()
-    print(f"Time to classify {toc - tic:0.4f} seconds")
 
     # Predict classes and remove classifications that aren't within the threshold
     return [(pred, loc) if rec else ("unknown", loc) for pred, loc, rec in zip(knn_clf.predict(faces_encodings), X_face_locations, are_matches)]
@@ -131,12 +125,9 @@ def predict(X_img_path, knn_clf=None, model_path=None, distance_threshold=0.5):
 def show_prediction_labels_on_image(img_path, predictions):
    
     image = face_recognition.load_image_file(img_path)
-    image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-
-    
+    image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR) 
    
     for name, (top, right, bottom, left) in predictions:
-        # Draw a box around the face using the Pillow module
         
         top_right = (right, top)
         bottom_left = (left, bottom + 22)
@@ -146,46 +137,147 @@ def show_prediction_labels_on_image(img_path, predictions):
         top_left=(top,left)
         cv2.rectangle(image, top_right,bottom_left, (255,0,0), 3)
         cv2.putText(image, str(name), (left,bottom), cv2.FONT_HERSHEY_SIMPLEX, 0.5, name_to_color(name),1,cv2.FILLED)
-
-    
     
     cv2.imshow(img_path, image)
     cv2.waitKey(0)
     cv2.destroyWindow(img_path)
 
+def Matching_Debug():
+
+    cap = cv2.VideoCapture(0)
+        
+    width = cap.get(3)
+    height = cap.get(4)
+    frame_area = width * height
+
+    print(height)
+    print(width)
+
+    while True:
+            
+        ret, frame = cap.read()
+        frame = cv2.flip(frame,1)
+
+        bounding_boxes = rec_face.detect_face(frame)
+   
+        for faces in bounding_boxes:
+
+            #[(y0,x1,y1,x0)]
+
+            top_right = (faces[1], faces[0])
+            bottom_left = (faces[3], faces[2])
+    
+
+            area = rec_face.bounding_box_area(faces)
+
+            if(faces[2] < height and area > frame_area/PROPORTION_FACTOR):
+    
+                predictions = predict(frame, model_path="trained_knn_model.clf")
+
+                for name, (top, right, bottom, left) in predictions:
+                
+                    #print(predictions)
+                    if(bottom < height and right < width):
+                        print(f"Found:{name},Top:{top},Right:{right},Left:{left},Botoom:{bottom}")
+                            
+
+            cv2.circle(frame,top_right, 10, (0,0,255), -1)
+            cv2.circle(frame,bottom_left, 10, (0,0,255), -1)
+            cv2.rectangle(frame, top_right,bottom_left, (255,0,0), 3)
+            cv2.putText(frame,"Area:{}".format(area),(10,int(height-10)),cv2.FONT_HERSHEY_COMPLEX,0.7,(0,0,255),2)
+
+        cv2.imshow("Frame", frame)
+        key = cv2.waitKey(1) & 0xFF
+      
+        serial.pooling()
+        if serial.W_State == communications.W_States.Maintenence:
+            print("aaaaaaaaaaaa")
+            cv2.destroyAllWindows()
+            cap.release()
+            return
+
+def Matching():
+
+    cap = cv2.VideoCapture(0)
+    width = cap.get(3)
+    height = cap.get(4)
+    frame_area = width * height
+    print(frame_area)
+
+    while True:
+            
+        ret, frame = cap.read()
+        bounding_boxes = rec_face.detect_face(frame)
+
+        for faces in bounding_boxes:
+
+            area = rec_face.bounding_box_area(faces)
+
+            if area > frame_area/PROPORTION_FACTOR:
+
+                crop_img= frame[faces[0]:faces[0]+faces[2],faces[3]:faces[3]+faces[1]]
+                predictions = predict(crop_img, model_path="trained_knn_model.clf")
+
+                for name, (top, right, bottom, left) in predictions:
+                    if verbose:
+                        print(f"Found a match:{name}")
+    
+        serial.pooling()
+        print(serial.W_State)
+        if serial.W_State == communications.W_States.Maintenence:
+            cv2.destroyAllWindows()
+            cap.release()
+            break
+                        
+                        
+                        
+    
+def default_train_predict():
+
+    tic = time.perf_counter()
+    print("Training KNN classifier...")
+    #Creates Classifier
+    classifier = train(TRAIN_DIR, model_save_path="trained_knn_model.clf",verbose=verbose)
+    print("Training complete!")
+    toc = time.perf_counter()
+
+    if verbose:
+       print(f"Time to train {toc - tic:0.4f} seconds")
+
+    
+    for image_file in os.listdir(TEST_DIR):
+        full_file_path = os.path.join(TEST_DIR, image_file)
+
+        print("Looking for faces in {}".format(image_file))
+
+        # Find all people in the image using a trained classifier model
+        predictions = predict(full_file_path, model_path="trained_knn_model.clf")
+        #print(predictions)
+
+        # Print results on the console
+        for name, (top, right, bottom, left) in predictions:
+            print("- Found {} at ({}, {})".format(name, left, top))
+
+        # Display results overlaid on an image
+        show_prediction_labels_on_image(os.path.join(TEST_DIR, image_file), predictions)
 
 if __name__ == "__main__":
-   
-    #tic = time.perf_counter()
-    #print("Training KNN classifier...")
-    #Creates Classifier
-    #classifier = train(TRAIN_DIR, model_save_path="trained_knn_model.clf",verbose)
-    #print("Training complete!")
-    #toc = time.perf_counter()
-    #if verbose:
-    #    print(f"Time to train {toc - tic:0.4f} seconds")
-
     
-    # for image_file in os.listdir(TEST_DIR):
-    #     full_file_path = os.path.join(TEST_DIR, image_file)
 
-    #     print("Looking for faces in {}".format(image_file))
-
-    #     # Find all people in the image using a trained classifier model
-    #     predictions = predict(full_file_path, model_path="trained_knn_model.clf")
-    #     print(predictions)
-
-    #     # Print results on the console
-    #     for name, (top, right, bottom, left) in predictions:
-    #         print("- Found {} at ({}, {})".format(name, left, top))
-
-    #     # Display results overlaid on an image
-    #     show_prediction_labels_on_image(os.path.join(TEST_DIR, image_file), predictions)
+    #default_train_predict()
    
-   while True:
-
+    while True:
        
-       if currentState == States.Idle:
-        serial.pooling()
-        
-    
+        if serial.W_State == communications.W_States.Maintenence:
+            serial.pooling()
+            
+
+        if serial.W_State == communications.W_States.Recognition:
+            Matching_Debug()
+            #Matching()
+            
+            
+           
+
+            
+       
