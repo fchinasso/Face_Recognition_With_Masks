@@ -1,5 +1,6 @@
 import math
 import os
+from re import M
 import shutil
 import time
 from enum import Enum
@@ -19,6 +20,7 @@ rec_face = detector.face_detector()
 class W_States(Enum):
     Maintenence = 1
     Recognition = 2
+    Training = 3
 
 
 #Enum of Serial States 
@@ -42,11 +44,7 @@ class SerialHandler():
             self.S_State = S_States.Unitialized 
             print(e)
 
-
-       
         self.W_State = W_States.Recognition
-       
-
        
 
     def pooling(self):
@@ -88,7 +86,7 @@ class SerialHandler():
                     self.exclude_user(message,m_lenght)
 
                 if m_header == "02" and m_type == "01":
-                    self.change_state(message,m_lenght)
+                    self.change_state(message,m_lenght)   
 
             if self.W_State == W_States.Recognition:
 
@@ -139,9 +137,7 @@ class SerialHandler():
                         break
 
                     m_tosend = "03" + '{0:x}'.format(m_lenght).zfill(2) + "03" + '{0:x}'.format(img_counter+1).zfill(2) + user_hex
-                    m_tosend=bytearray.fromhex(m_tosend).decode()
-
-
+  
                     ret,frame = self.cap.read()
                     
                     if time.time() - start_time >= TIME_BETWEEN_PHOTOS: 
@@ -155,11 +151,17 @@ class SerialHandler():
                             if self.Verbose:
                                 print(f"Image {img_counter} written.")
 
+                            m_tosend = m_tosend + self.calculate_cheksum(m_tosend)
+                            m_tosend=bytearray.fromhex(m_tosend).decode("ISO-8859-1")
+                 
+                            if self.Verbose:
+                                print(f"mtosend:{m_tosend}")
+
                             self.serial.write(m_tosend.encode())   
+
                             start_time = time.time()
                             img_counter += 1
 
-                    
                         else:
                             print("Photo not suitable for training: {}".format("Didn't find a face" if len(bounding_boxes) < 1 else "Found more than one face."))
                             start_time = time.time()
@@ -167,21 +169,24 @@ class SerialHandler():
                 self.cap.release()
 
                 if img_counter < IMAGE_PER_USER/2:
-                            if(self.Verbose):
-                                print(f"Failed to take enough pictures,{img_counter} pics were taken.")
 
-                            shutil.rmtree(user_dir)
-                            m_tosend = "03" + "02" + "03" + "0b"
-                            m_tosend=bytearray.fromhex(m_tosend).decode() 
-                            self.serial.write(m_tosend.encode())
+                    if(self.Verbose):
+                        print(f"Failed to take enough pictures,{img_counter} pics were taken.")
+
+                    shutil.rmtree(user_dir)
+                    m_tosend = "03" + "02" + "03" + "0b"
+                    m_tosend = m_tosend + self.calculate_cheksum(m_tosend)
+                    m_tosend=bytearray.fromhex(m_tosend).decode("ISO-8859-1") 
+                    self.serial.write(m_tosend.encode())
 
 
                 if img_counter >= IMAGE_PER_USER/2:
-                            if (self.Verbose):
-                                print(f"Succefully registered user {user},{img_counter} pics were taken.")
-                                m_tosend = "03" + "02" + "03" + "0c"
-                                m_tosend=bytearray.fromhex(m_tosend).decode() 
-                                self.serial.write(m_tosend.encode())
+                    if (self.Verbose):
+                        print(f"Succefully registered user {user},{img_counter} pics were taken.")
+                    m_tosend = "03" + "02" + "03" + "0c"
+                    m_tosend = m_tosend + self.calculate_cheksum(m_tosend)
+                    m_tosend=bytearray.fromhex(m_tosend).decode("ISO-8859-1") 
+                    self.serial.write(m_tosend.encode())
 
 
             except Exception as e: 
@@ -189,7 +194,8 @@ class SerialHandler():
                 print("ERROR:Failed to take pictures.")
                 shutil.rmtree(user_dir)
                 m_tosend = "03" + "02" + "03" + "00"
-                m_tosend=bytearray.fromhex(m_tosend).decode() 
+                m_tosend = m_tosend + self.calculate_cheksum(m_tosend)
+                m_tosend=bytearray.fromhex(m_tosend).decode("ISO-8859-1") 
                 self.serial.write(m_tosend.encode())
                 self.cap.release()
                 return
@@ -216,6 +222,10 @@ class SerialHandler():
         if not os.path.exists(user_dir):
             print("ERROR:User doesn't exists.")
             m_tosend = "03" + "02" + "09" + "02"
+            m_tosend = m_tosend + self.calculate_cheksum(m_tosend)
+            m_tosend=bytearray.fromhex(m_tosend).decode("ISO-8859-1") 
+            self.serial.write(m_tosend.encode())
+            return
                       
 
         else:
@@ -224,20 +234,24 @@ class SerialHandler():
                 if self.Verbose:
                     print(f"User:{user} deleted.")
                     m_tosend = "03" + "02" + "09" + "01"
+                    m_tosend = m_tosend + self.calculate_cheksum(m_tosend)
+                    m_tosend=bytearray.fromhex(m_tosend).decode() 
+                    self.serial.write(m_tosend.encode())
                 
                 
             except OSError as e:
                 print(f"ERROR: {e.filename}- {e.strerror}.")
                 m_tosend = "03" + "02" + "09" + "03"
+                m_tosend = m_tosend + self.calculate_cheksum(m_tosend)
+                m_tosend=bytearray.fromhex(m_tosend).decode() 
+                self.serial.write(m_tosend.encode())
         
-        print(m_tosend)
         return
 
 
     def change_state(self,message,m_lenght):
 
         mode = message[6]+message[7]
-        print(mode)
         
         if mode == "00":
             self.W_State = W_States.Maintenence
@@ -249,6 +263,57 @@ class SerialHandler():
             if self.Verbose:
                 print("Serial State Changed to Recognition")
 
+        if mode == "01":
+            self.W_State = W_States.Training
+            if self.Verbose:
+                print("Serial State Changed to Training")
+
+    def send_matching(self,message):
+
+        if self.S_State == S_States.Unitialized:
+           
+            if self.Verbose:
+                print("ERROR:Serial is not initialized")
+            return
+        
+        if self.S_State == S_States.Working:
+
+          try:
+
+                if message == "unknown":
+                    m_tosend = "02010205"
+
+                else:
+                    message= message.encode().hex()
+                    m_tosend = "03" + "09" + "08" + message
+
+                m_tosend = m_tosend + self.calculate_cheksum(m_tosend)
+                m_tosend=bytearray.fromhex(m_tosend).decode("ISO-8859-1") 
+                
+                self.serial.write(m_tosend.encode())
+          
+          except Exception as e:
+                print(f"ERROR: {e.filename}- {e.strerror}.")
+
+    def calculate_cheksum(self,message):
+
+        lenght = int(message[2] + message[3],16)
+        sum = 0
+        
+        for x in range(2,(lenght+2)*2,2):
+            sum = sum + int(message[x:x+2],16)
+
+        if sum > 255:
+            sum = sum & 0xff
+
+        sum = '{0:x}'.format(sum).zfill(2) 
+        return sum
+            
+
+
+        
+
+    
 
         
                 

@@ -1,3 +1,4 @@
+from numpy import ComplexWarning, byte
 from sklearn import neighbors
 import os
 import os.path
@@ -179,6 +180,7 @@ def Matching_Debug():
                     #print(predictions)
                     if(bottom < height and right < width):
                         print(f"Found:{name},Top:{top},Right:{right},Left:{left},Botoom:{bottom}")
+                        serial.send_matching(name)
                             
 
             cv2.circle(frame,top_right, 10, (0,0,255), -1)
@@ -191,7 +193,6 @@ def Matching_Debug():
       
         serial.pooling()
         if serial.W_State == communications.W_States.Maintenence:
-            print("aaaaaaaaaaaa")
             cv2.destroyAllWindows()
             cap.release()
             return
@@ -207,32 +208,33 @@ def Matching():
     while True:
             
         ret, frame = cap.read()
-        bounding_boxes = rec_face.detect_face(frame)
+        frame = cv2.flip(frame,1)
 
+        bounding_boxes = rec_face.detect_face(frame)
+   
         for faces in bounding_boxes:
 
+            #[(y0,x1,y1,x0)]
+    
             area = rec_face.bounding_box_area(faces)
 
-            if area > frame_area/PROPORTION_FACTOR:
-
-                crop_img= frame[faces[0]:faces[0]+faces[2],faces[3]:faces[3]+faces[1]]
-                predictions = predict(crop_img, model_path="trained_knn_model.clf")
-
-                for name, (top, right, bottom, left) in predictions:
-                    if verbose:
-                        print(f"Found a match:{name}")
+            if(faces[2] < height and area > frame_area/PROPORTION_FACTOR):
     
+                predictions = predict(frame, model_path="trained_knn_model.clf")
+
+                for name, (top, right, bottom, left) in predictions:                
+                    #print(predictions)
+                    if(bottom < height and right < width):
+                        print(f"Found:{name},Top:{top},Right:{right},Left:{left},Botoom:{bottom}")
+                        serial.send_matching(name)
+      
         serial.pooling()
-        print(serial.W_State)
-        if serial.W_State == communications.W_States.Maintenence:
-            cv2.destroyAllWindows()
+
+        if serial.W_State != communications.W_States.Recognition:
             cap.release()
-            break
+            return
                         
-                        
-                        
-    
-def default_train_predict():
+def train_predict():
 
     tic = time.perf_counter()
     print("Training KNN classifier...")
@@ -261,23 +263,30 @@ def default_train_predict():
         # Display results overlaid on an image
         show_prediction_labels_on_image(os.path.join(TEST_DIR, image_file), predictions)
 
-if __name__ == "__main__":
-    
 
-    #default_train_predict()
+if __name__ == "__main__":
    
-    while True:
+   while True:
        
         if serial.W_State == communications.W_States.Maintenence:
             serial.pooling()
             
 
         if serial.W_State == communications.W_States.Recognition:
+            if verbose:
+                print("Entered Recognition routine")
             Matching_Debug()
-            #Matching()
-            
-            
-           
+#            Matching()
 
+        if serial.W_State == communications.W_States.Training:
+            print("Training")
+            if verbose:
+                print("Entered training routine")
+            train(TRAIN_DIR, model_save_path="trained_knn_model.clf",verbose=True)
+
+            #Returns to Maintenence 
+            serial.change_state("02020100",8)
+            
+            
             
        
