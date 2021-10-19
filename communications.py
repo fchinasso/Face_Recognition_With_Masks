@@ -44,7 +44,7 @@ class SerialHandler():
             self.S_State = S_States.Unitialized 
             print(e)
 
-        self.W_State = W_States.Recognition
+        self.W_State = W_States.Maintenence
        
 
     def pooling(self):
@@ -152,10 +152,11 @@ class SerialHandler():
                                 print(f"Image {img_counter} written.")
 
                             m_tosend = m_tosend + self.calculate_cheksum(m_tosend)
-                            m_tosend=bytearray.fromhex(m_tosend).decode("ISO-8859-1")
-                 
+                            
                             if self.Verbose:
                                 print(f"mtosend:{m_tosend}")
+
+                            m_tosend=bytearray.fromhex(m_tosend).decode("ISO-8859-1")
 
                             self.serial.write(m_tosend.encode())   
 
@@ -183,10 +184,26 @@ class SerialHandler():
                 if img_counter >= IMAGE_PER_USER/2:
                     if (self.Verbose):
                         print(f"Succefully registered user {user},{img_counter} pics were taken.")
-                    m_tosend = "03" + "02" + "03" + "0c"
+                  
+                    for i in range (img_counter,9):
+                        m_tosend = "03" + '{0:x}'.format(m_lenght).zfill(2) + "03" + '{0:x}'.format(i).zfill(2) + user_hex
+                        m_tosend = m_tosend + self.calculate_cheksum(m_tosend)
+                        
+                        if self.Verbose:
+                            print(f"mtosend:{m_tosend}") 
+
+                        m_tosend=bytearray.fromhex(m_tosend).decode("ISO-8859-1") 
+                        self.serial.write(m_tosend.encode())
+                    
+                    m_tosend = "03" + '{0:x}'.format(m_lenght).zfill(2) + "03" + "0C" + user_hex
                     m_tosend = m_tosend + self.calculate_cheksum(m_tosend)
+
+                    if self.Verbose:
+                        print(f"mtosend:{m_tosend}")
+
                     m_tosend=bytearray.fromhex(m_tosend).decode("ISO-8859-1") 
                     self.serial.write(m_tosend.encode())
+                    
 
 
             except Exception as e: 
@@ -258,10 +275,21 @@ class SerialHandler():
             if self.Verbose:
                 print("Serial State changed to Maintence")
             
+            m_tosend = "03" + "02" + "01" + "00"
+            m_tosend = m_tosend + self.calculate_cheksum(m_tosend)
+            m_tosend=bytearray.fromhex(m_tosend).decode() 
+            self.serial.write(m_tosend.encode())
+            
         if mode == "02":
             self.W_State = W_States.Recognition
             if self.Verbose:
                 print("Serial State Changed to Recognition")
+            
+            m_tosend = "03" + "02" + "01" + "02"
+            m_tosend = m_tosend + self.calculate_cheksum(m_tosend)
+            m_tosend=bytearray.fromhex(m_tosend).decode() 
+            self.serial.write(m_tosend.encode())
+        
 
         if mode == "01":
             self.W_State = W_States.Training
