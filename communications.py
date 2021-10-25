@@ -35,7 +35,7 @@ class SerialHandler():
         self.Verbose = Verbose
 
         try:
-            self.serial=serial.Serial("/dev/ttyACM0",baudrate=115200, parity=serial.PARITY_NONE,stopbits=serial.STOPBITS_ONE,bytesize=serial.EIGHTBITS,timeout=2)
+            self.serial=serial.Serial("/dev/ttyS0",baudrate=115200, parity=serial.PARITY_NONE,stopbits=serial.STOPBITS_ONE,bytesize=serial.EIGHTBITS,timeout=2)
             if self.Verbose:
                 print("Serial Initialized")
             self.S_State = S_States.Working
@@ -92,6 +92,8 @@ class SerialHandler():
 
                 if m_header == "02" and m_type == "01":
                     self.change_state(message,m_lenght)
+
+            self.serial.reset_input_buffer() 
 
 
     
@@ -157,7 +159,6 @@ class SerialHandler():
                                 print(f"mtosend:{m_tosend}")
 
                             m_tosend=bytearray.fromhex(m_tosend).decode("ISO-8859-1")
-
                             self.serial.write(m_tosend.encode())   
 
                             start_time = time.time()
@@ -185,16 +186,8 @@ class SerialHandler():
                     if (self.Verbose):
                         print(f"Succefully registered user {user},{img_counter} pics were taken.")
                   
-                    for i in range (img_counter,9):
-                        m_tosend = "03" + '{0:x}'.format(m_lenght).zfill(2) + "03" + '{0:x}'.format(i).zfill(2) + user_hex
-                        m_tosend = m_tosend + self.calculate_cheksum(m_tosend)
-                        
-                        if self.Verbose:
-                            print(f"mtosend:{m_tosend}") 
+                    time.sleep(1)
 
-                        m_tosend=bytearray.fromhex(m_tosend).decode("ISO-8859-1") 
-                        self.serial.write(m_tosend.encode())
-                    
                     m_tosend = "03" + '{0:x}'.format(m_lenght).zfill(2) + "03" + "0C" + user_hex
                     m_tosend = m_tosend + self.calculate_cheksum(m_tosend)
 
@@ -221,12 +214,11 @@ class SerialHandler():
     def exclude_user(self,message,m_lenght):
 
         user = ""
-        register_size = 2*(m_lenght-2)
-
+        register_size = 2*(m_lenght)-2
 
         for x in range(register_size):
             
-            user = user + message[8+x]
+            user = user + message[6+x]
 
         user = bytearray.fromhex(user).decode()
 
@@ -250,10 +242,10 @@ class SerialHandler():
                 shutil.rmtree(user_dir)
                 if self.Verbose:
                     print(f"User:{user} deleted.")
-                    m_tosend = "03" + "02" + "09" + "01"
-                    m_tosend = m_tosend + self.calculate_cheksum(m_tosend)
-                    m_tosend=bytearray.fromhex(m_tosend).decode() 
-                    self.serial.write(m_tosend.encode())
+                m_tosend = "03" + "02" + "09" + "01"
+                m_tosend = m_tosend + self.calculate_cheksum(m_tosend)
+                m_tosend=bytearray.fromhex(m_tosend).decode("ISO-8859-1") 
+                self.serial.write(m_tosend.encode())
                 
                 
             except OSError as e:
